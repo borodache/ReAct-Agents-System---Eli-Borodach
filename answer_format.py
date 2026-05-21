@@ -260,13 +260,21 @@ def _format_examples_answer(result: GetDatasetExamplesOutput, *, question: str =
         header_parts.append(f"from the {filters.category.upper()} category")
     elif filters and filters.intent:
         header_parts.append(f"for intent {filters.intent}")
-    header = " ".join(header_parts) + ":\n"
+    header = " ".join(header_parts) + ":"
+    if result.message:
+        header += f"\n({result.message})"
+    header += "\n"
 
     blocks: list[str] = []
+    intent_counts: dict[str, int] = {}
     for index, ex in enumerate(result.examples, start=1):
+        intent_counts[ex.intent] = intent_counts.get(ex.intent, 0) + 1
+        intent_label = ex.intent
+        if intent_counts[ex.intent] > 1:
+            intent_label = f"{ex.intent} (different customer message)"
         cat = f" [{ex.category}]" if ex.category else ""
         blocks.append(
-            f"{index}. Intent: {ex.intent}{cat}\n"
+            f"{index}. Intent: {intent_label}{cat}\n"
             f"   Customer: {ex.instruction}\n"
             f"   Agent: {ex.response}"
         )

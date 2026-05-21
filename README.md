@@ -102,7 +102,7 @@ Web chat interface with the same agent, sessions, and user profiles:
 streamlit run streamlit_app.py
 ```
 
-Use the sidebar to set **Session ID** and **User ID**, toggle **Show reasoning trace**, or click example questions. Chat history in the UI resets when you change session/user; the agent still restores prior turns from SQLite checkpoints for the same session id.
+Use the sidebar to toggle **Show reasoning trace** or click example questions. The app uses the default session and user profile (`default`).
 
 ## MCP server (`mcp_server.py`)
 

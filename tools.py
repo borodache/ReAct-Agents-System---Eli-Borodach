@@ -142,9 +142,23 @@ def run_get_dataset_examples(params: GetDatasetExamplesInput) -> GetDatasetExamp
                 limit=params.limit,
             ),
         )
+    unique_intents = len({row["intent"] for row in examples})
+    message = None
+    if unique_intents < len(examples) and params.category:
+        message = (
+            f"{params.category.upper()} has only {unique_intents} distinct intents in the "
+            f"dataset; examples use different customer messages where possible."
+        )
+
     return GetDatasetExamplesOutput(
         count=len(examples),
         examples=[_example_from_row(row) for row in examples],
+        message=message,
+        filters=FilterSummary(
+            category=params.category,
+            intent=params.intent,
+            limit=params.limit,
+        ),
     )
 
 

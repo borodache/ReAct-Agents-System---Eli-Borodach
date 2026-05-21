@@ -10,18 +10,11 @@ import streamlit as st
 import config  # noqa: F401 — loads .env (if present) or OS env vars
 from agent import ask, create_react_agent
 from checkpointer import normalize_session_id
-from config import (
-    create_profile_chat_model,
-    get_nebius_api_key,
-    get_nebius_model,
-    get_nebius_profile_model,
-)
-from user_profile import (
-    format_profile_for_prompt,
-    load_profile,
-    normalize_user_id,
-    profile_greeting,
-)
+from config import create_profile_chat_model, get_nebius_api_key
+from user_profile import normalize_user_id
+
+DEFAULT_SESSION = "default"
+DEFAULT_USER = "default"
 
 EXAMPLE_QUESTIONS = [
     "What categories exist in the dataset?",
@@ -32,13 +25,13 @@ EXAMPLE_QUESTIONS = [
 
 
 @st.cache_resource(show_spinner="Loading dataset and building agent…")
-def _load_agent(model: str | None):
-    return create_react_agent(model=model or None)
+def _load_agent():
+    return create_react_agent()
 
 
 @st.cache_resource
-def _load_profile_llm(model: str | None):
-    return create_profile_chat_model(model=model or None, temperature=0)
+def _load_profile_llm():
+    return create_profile_chat_model(temperature=0)
 
 
 def _run_question(
@@ -95,24 +88,10 @@ def main() -> None:
         )
         st.stop()
 
+    thread_id = normalize_session_id(DEFAULT_SESSION)
+    user_id = normalize_user_id(DEFAULT_USER)
+
     with st.sidebar:
-        st.header("Settings")
-        session_raw = st.text_input(
-            "Session ID",
-            value="default",
-            help="Same id restores conversation history (SQLite checkpoints).",
-        )
-        user_raw = st.text_input(
-            "User ID",
-            value="default",
-            help="Persistent profile in `.profiles/` (defaults to session id).",
-        )
-        model_override = st.text_input(
-            "Model override",
-            value="",
-            placeholder=get_nebius_model(),
-            help="Leave empty to use NEBIUS_MODEL from config / secrets",
-        )
         show_trace = st.checkbox("Show reasoning trace", value=False)
 
         st.divider()
@@ -126,29 +105,8 @@ def main() -> None:
             st.session_state.messages = []
             st.rerun()
 
-    thread_id = normalize_session_id(session_raw)
-    user_id = normalize_user_id(user_raw or session_raw)
-    model = model_override.strip() or None
-
-    if st.session_state.get("last_thread") != thread_id or st.session_state.get("last_user") != user_id:
-        st.session_state.messages = []
-    st.session_state.last_thread = thread_id
-    st.session_state.last_user = user_id
-
-    agent = _load_agent(model)
-    profile_llm = _load_profile_llm(model)
-
-    with st.sidebar:
-        st.caption(f"Agent model: `{model or get_nebius_model()}`")
-        st.caption(f"Profile model: `{get_nebius_profile_model(fallback=model)}`")
-
-        profile = load_profile(user_id)
-        greet = profile_greeting(profile)
-        if greet:
-            st.success(greet)
-        if not profile.is_empty():
-            with st.expander("User profile"):
-                st.text(format_profile_for_prompt(profile))
+    agent = _load_agent()
+    profile_llm = _load_profile_llm()
 
     if "messages" not in st.session_state:
         st.session_state.messages = []

@@ -110,13 +110,29 @@ def sample_rows(
     return rows[: max(limit, 0)]
 
 
+def _instruction_similarity(left: str, right: str) -> float:
+    """Jaccard similarity on words — higher means more alike."""
+    left_words = set(left.lower().split())
+    right_words = set(right.lower().split())
+    if not left_words or not right_words:
+        return 1.0 if left.strip().lower() == right.strip().lower() else 0.0
+    union = left_words | right_words
+    return len(left_words & right_words) / len(union)
+
+
+def _is_distinct_row(candidate: dict[str, Any], chosen: list[dict[str, Any]]) -> bool:
+    """Reject rows whose customer message is too similar to an already picked row."""
+    text = candidate["instruction"]
+    return all(_instruction_similarity(text, row["instruction"]) <= 0.45 for row in chosen)
+
+
 def diverse_sample_from_rows(
     rows: list[dict[str, Any]],
     *,
     limit: int = 3,
     offset: int = 0,
 ) -> list[dict[str, Any]]:
-    """Round-robin across intents and skip rows with duplicate customer instructions."""
+    """Sample rows with distinct intents first, then maximally different instructions."""
     if not rows or limit <= 0:
         return []
 
@@ -128,28 +144,41 @@ def diverse_sample_from_rows(
     sampled: list[dict[str, Any]] = []
     seen_instructions: set[str] = set()
     intent_names = sorted(by_intent)
-    indices = dict.fromkeys(intent_names, 0)
 
-    while len(sampled) < need:
-        added = False
-        for intent_name in intent_names:
-            if len(sampled) >= need:
-                break
-            pool = by_intent[intent_name]
-            idx = indices[intent_name]
-            while idx < len(pool):
-                row = pool[idx]
-                idx += 1
-                key = row["instruction"].strip().lower()
-                if key in seen_instructions:
-                    continue
-                seen_instructions.add(key)
-                sampled.append(row)
-                added = True
-                break
-            indices[intent_name] = idx
-        if not added:
+    # Phase 1: at most one example per intent (spread across intents).
+    for intent_name in intent_names:
+        if len(sampled) >= need:
             break
+        for row in by_intent[intent_name]:
+            key = row["instruction"].strip().lower()
+            if key in seen_instructions:
+                continue
+            if not _is_distinct_row(row, sampled):
+                continue
+            seen_instructions.add(key)
+            sampled.append(row)
+            break
+
+    # Phase 2: fill remainder with rows least similar to those already chosen.
+    while len(sampled) < need:
+        best_row: dict[str, Any] | None = None
+        best_score = -1.0
+        for intent_name in intent_names:
+            for row in by_intent[intent_name]:
+                key = row["instruction"].strip().lower()
+                if key in seen_instructions or not _is_distinct_row(row, sampled):
+                    continue
+                score = min(
+                    _instruction_similarity(row["instruction"], prior["instruction"])
+                    for prior in sampled
+                )
+                if score > best_score:
+                    best_score = score
+                    best_row = row
+        if best_row is None:
+            break
+        seen_instructions.add(best_row["instruction"].strip().lower())
+        sampled.append(best_row)
 
     start = max(offset, 0)
     end = start + limit if limit > 0 else len(sampled)
