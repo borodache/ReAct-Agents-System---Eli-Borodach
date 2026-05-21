@@ -12,6 +12,7 @@ from langchain_core.messages import (
     SystemMessage,
     ToolMessage,
 )
+from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode, tools_condition
@@ -23,8 +24,8 @@ from config import create_chat_model, create_profile_chat_model
 from filter_context import (
     bind_filter_thread,
     clear_filter_thread,
-    init_filter_context,
-    rehydrate_filters_from_messages,
+    export_filter_store_json,
+    prepare_filters_for_turn,
 )
 from router import QueryClassification, classify_query
 from user_profile import (
@@ -125,6 +126,7 @@ class AgentState(TypedDict, total=False):
     route_reason: str
     user_id: str
     user_profile_json: str
+    filter_store_json: str
 
 
 def _profile_from_state(state: AgentState) -> UserProfile:
@@ -166,10 +168,30 @@ def _make_agent_node(llm_with_tools, system_prompt: str):
     return agent_node
 
 
+def _tools_node_with_filter_memory(tools: list):
+    """Run tools and persist filter_id store into graph state."""
+    tool_node = ToolNode(tools)
+
+    def node(state: AgentState, config: RunnableConfig) -> dict:
+        thread_id = (config or {}).get("configurable", {}).get("thread_id")
+        prepare_filters_for_turn(
+            thread_id=str(thread_id) if thread_id else None,
+            filter_store_json=state.get("filter_store_json"),
+            messages=state.get("messages", []),
+        )
+        result = tool_node.invoke(state, config)
+        patch = {"filter_store_json": export_filter_store_json()}
+        if isinstance(result, dict):
+            return {**result, **patch}
+        return patch
+
+    return node
+
+
 def _build_react_subgraph(llm: BaseChatModel, tools: list, system_prompt: str):
     """ReAct loop: agent <-> tools until no more tool calls."""
     llm_with_tools = llm.bind_tools(tools)
-    tool_node = ToolNode(tools)
+    tool_node = _tools_node_with_filter_memory(tools)
 
     graph = StateGraph(AgentState)
     graph.add_node("agent", _make_agent_node(llm_with_tools, system_prompt))
@@ -351,11 +373,21 @@ def ask(
     if profile_for_turn_json:
         invoke_input["user_profile_json"] = profile_for_turn_json
 
-    bind_filter_thread(thread_id)
-    init_filter_context(reset=False)
-    rehydrate_filters_from_messages(prior_messages)
+    prior_filter_json = None
+    if prior_snapshot and prior_snapshot.values:
+        prior_filter_json = prior_snapshot.values.get("filter_store_json")
+
+    prepare_filters_for_turn(
+        thread_id=thread_id,
+        filter_store_json=prior_filter_json,
+        messages=prior_messages,
+    )
     try:
         result = agent.invoke(invoke_input, config=config)
+        agent.update_state(
+            config,
+            {"filter_store_json": export_filter_store_json()},
+        )
     finally:
         bind_filter_thread(None)
 
@@ -432,7 +464,10 @@ def chat_turns_from_checkpoint(agent, thread_id: str) -> list[tuple[str, str]]:
 def clear_thread_checkpoint(agent, thread_id: str) -> None:
     """Remove stored conversation messages and filters for this thread."""
     clear_filter_thread(thread_id)
-    agent.update_state(thread_config(thread_id), {"messages": []})
+    agent.update_state(
+        thread_config(thread_id),
+        {"messages": [], "filter_store_json": "{}"},
+    )
 
 
 create_dataset_agent = create_react_agent

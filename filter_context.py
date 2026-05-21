@@ -278,3 +278,39 @@ def update_filter(filter_id: str, spec: FilterSpec) -> str:
     if thread:
         _persist_filters_disk(thread)
     return filter_id
+
+
+def export_filter_store_json() -> str:
+    """Serialize the active thread's filter store for LangGraph checkpoint state."""
+    store = _store()
+    payload = {key: spec.model_dump() for key, spec in store.items()}
+    return json.dumps(payload)
+
+
+def import_filter_store_json(payload: str | None) -> None:
+    """Merge filters from checkpoint JSON into the active thread store."""
+    if not payload or not str(payload).strip():
+        return
+    try:
+        raw = json.loads(payload)
+    except json.JSONDecodeError:
+        return
+    if not isinstance(raw, dict):
+        return
+    store = _store()
+    for filter_id, item in raw.items():
+        if isinstance(item, dict):
+            store[str(filter_id)] = FilterSpec.model_validate(item).normalized()
+
+
+def prepare_filters_for_turn(
+    *,
+    thread_id: str | None,
+    filter_store_json: str | None,
+    messages: list[Any],
+) -> None:
+    """Load filters from checkpoint + chat history before an agent turn."""
+    if thread_id:
+        bind_filter_thread(thread_id)
+    import_filter_store_json(filter_store_json)
+    rehydrate_filters_from_messages(messages)

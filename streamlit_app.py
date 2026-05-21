@@ -26,6 +26,9 @@ _IP_HEADER_KEYS = (
     "Remote-Addr",
 )
 
+# Bump when the LangGraph agent structure changes (invalidates st.cache_resource).
+_AGENT_CACHE_VERSION = 2
+
 EXAMPLE_QUESTIONS = [
     "What categories exist in the dataset?",
     "How many refund requests did we get?",
@@ -96,7 +99,7 @@ def _sync_chat_for_thread(agent, thread_id: str) -> None:
 
 
 @st.cache_resource(show_spinner="Loading dataset and building agent…")
-def _load_agent():
+def _load_agent(_version: int = _AGENT_CACHE_VERSION):
     return create_react_agent()
 
 

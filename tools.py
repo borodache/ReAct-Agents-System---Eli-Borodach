@@ -204,7 +204,14 @@ def run_filter_by_category(params: FilterByCategoryInput) -> FilterToolOutput:
 
 
 def run_count_rows(params: CountRowsInput) -> CountRowsOutput:
-    spec = get_filter(params.filter_id)  # resolves stale/hallucinated filter_id when possible
+    try:
+        spec = get_filter(params.filter_id)
+    except KeyError as exc:
+        raise ValueError(
+            f"{exc} Run filter_by_intent or filter_by_category in this turn first and pass "
+            "the new filter_id from that result. For refund totals you can use "
+            "count_dataset_records(intent='get_refund') instead."
+        ) from exc
     total = _count_for_spec(spec)
     return CountRowsOutput(
         count=total,
