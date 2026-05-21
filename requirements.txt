@@ -13,4 +13,4 @@ typing-extensions>=4.0.0
 fastmcp>=2.0.0
 
 # Streamlit UI (streamlit_app.py)
-streamlit>=1.32.0
+streamlit>=1.37.0

@@ -13,8 +13,13 @@ from checkpointer import normalize_session_id
 from config import create_profile_chat_model, get_nebius_api_key
 from user_profile import normalize_user_id
 
-DEFAULT_SESSION = "default"
-DEFAULT_USER = "default"
+_IP_HEADER_KEYS = (
+    "X-Forwarded-For",
+    "X-Real-Ip",
+    "CF-Connecting-IP",
+    "Forwarded",
+    "Remote-Addr",
+)
 
 EXAMPLE_QUESTIONS = [
     "What categories exist in the dataset?",
@@ -22,6 +27,55 @@ EXAMPLE_QUESTIONS = [
     "Show me 3 examples from the SHIPPING category.",
     "Summarize the FEEDBACK category.",
 ]
+
+
+def _request_headers() -> dict[str, str]:
+    """Best-effort HTTP headers for the active Streamlit browser session."""
+    try:
+        raw = st.context.headers
+        if raw is not None:
+            return {str(k): str(v) for k, v in raw.items()}
+    except Exception:
+        pass
+
+    try:
+        from streamlit.runtime.scriptrunner import get_script_run_ctx
+
+        ctx = get_script_run_ctx()
+        session = getattr(ctx, "session", None) if ctx is not None else None
+        request = getattr(session, "request", None) if session is not None else None
+        if request is not None:
+            return {str(k): str(v) for k, v in request.headers.items()}
+    except Exception:
+        pass
+
+    return {}
+
+
+def _client_ip() -> str:
+    headers = _request_headers()
+    lowered = {k.lower(): v for k, v in headers.items()}
+    for key in _IP_HEADER_KEYS:
+        value = headers.get(key) or lowered.get(key.lower())
+        if value:
+            first = value.split(",")[0].strip()
+            if first:
+                return first
+    return "unknown"
+
+
+def _visitor_session_key() -> str:
+    """Stable per-browser session id derived from the visitor IP (cached in session state)."""
+    if "visitor_session_key" not in st.session_state:
+        ip = _client_ip()
+        st.session_state.visitor_session_key = normalize_session_id(f"ip_{ip}")
+    return st.session_state.visitor_session_key
+
+
+def _visitor_thread_and_user_ids() -> tuple[str, str]:
+    key = _visitor_session_key()
+    user_id = normalize_user_id(key)
+    return key, user_id
 
 
 @st.cache_resource(show_spinner="Loading dataset and building agent…")
@@ -88,11 +142,11 @@ def main() -> None:
         )
         st.stop()
 
-    thread_id = normalize_session_id(DEFAULT_SESSION)
-    user_id = normalize_user_id(DEFAULT_USER)
+    thread_id, user_id = _visitor_thread_and_user_ids()
 
     with st.sidebar:
         show_trace = st.checkbox("Show reasoning trace", value=False)
+        st.caption(f"Your session: `{thread_id}`")
 
         st.divider()
         st.subheader("Example questions")

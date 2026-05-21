@@ -102,7 +102,7 @@ Web chat interface with the same agent, sessions, and user profiles:
 streamlit run streamlit_app.py
 ```
 
-Use the sidebar to toggle **Show reasoning trace** or click example questions. The app uses the default session and user profile (`default`).
+Use the sidebar to toggle **Show reasoning trace** or click example questions. Each visitor gets a separate conversation and profile keyed by **client IP** (shown as `ip_…` in the sidebar). Local runs often share `ip_127_0_0_1` or `ip_unknown`.
 
 ## MCP server (`mcp_server.py`)
 
