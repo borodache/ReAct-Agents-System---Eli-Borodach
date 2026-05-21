@@ -8,7 +8,12 @@ from contextlib import redirect_stdout
 import streamlit as st
 
 import config  # noqa: F401 — loads .env (if present) or OS env vars
-from agent import ask, create_react_agent
+from agent import (
+    ask,
+    chat_turns_from_checkpoint,
+    clear_thread_checkpoint,
+    create_react_agent,
+)
 from checkpointer import normalize_session_id
 from config import create_profile_chat_model, get_nebius_api_key
 from user_profile import normalize_user_id
@@ -64,18 +69,30 @@ def _client_ip() -> str:
     return "unknown"
 
 
-def _visitor_session_key() -> str:
-    """Stable per-browser session id derived from the visitor IP (cached in session state)."""
-    if "visitor_session_key" not in st.session_state:
-        ip = _client_ip()
-        st.session_state.visitor_session_key = normalize_session_id(f"ip_{ip}")
-    return st.session_state.visitor_session_key
+def _thread_id_for_ip(ip: str) -> str:
+    return normalize_session_id(f"ip_{ip}")
 
 
 def _visitor_thread_and_user_ids() -> tuple[str, str]:
-    key = _visitor_session_key()
-    user_id = normalize_user_id(key)
-    return key, user_id
+    """One checkpoint thread + profile file per client IP."""
+    thread_id = _thread_id_for_ip(_client_ip())
+    return thread_id, normalize_user_id(thread_id)
+
+
+def _ui_messages_from_checkpoint(agent, thread_id: str) -> list[dict]:
+    messages: list[dict] = []
+    for question, answer in chat_turns_from_checkpoint(agent, thread_id):
+        messages.append({"role": "user", "content": question})
+        messages.append({"role": "assistant", "content": answer})
+    return messages
+
+
+def _sync_chat_for_thread(agent, thread_id: str) -> None:
+    """Load SQLite checkpoint history into the Streamlit chat when the IP/thread changes."""
+    if st.session_state.get("messages_thread") == thread_id and "messages" in st.session_state:
+        return
+    st.session_state.messages = _ui_messages_from_checkpoint(agent, thread_id)
+    st.session_state.messages_thread = thread_id
 
 
 @st.cache_resource(show_spinner="Loading dataset and building agent…")
@@ -143,10 +160,13 @@ def main() -> None:
         st.stop()
 
     thread_id, user_id = _visitor_thread_and_user_ids()
+    agent = _load_agent()
+    profile_llm = _load_profile_llm()
+    _sync_chat_for_thread(agent, thread_id)
 
     with st.sidebar:
         show_trace = st.checkbox("Show reasoning trace", value=False)
-        st.caption(f"Your session: `{thread_id}`")
+        st.caption(f"Memory for your IP: `{thread_id}`")
 
         st.divider()
         st.subheader("Example questions")
@@ -155,15 +175,11 @@ def main() -> None:
                 st.session_state.pending_question = example
 
         st.divider()
-        if st.button("Clear chat display", use_container_width=True):
+        if st.button("Clear chat & memory", use_container_width=True):
+            clear_thread_checkpoint(agent, thread_id)
             st.session_state.messages = []
+            st.session_state.messages_thread = thread_id
             st.rerun()
-
-    agent = _load_agent()
-    profile_llm = _load_profile_llm()
-
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
 
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):

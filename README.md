@@ -102,7 +102,7 @@ Web chat interface with the same agent, sessions, and user profiles:
 streamlit run streamlit_app.py
 ```
 
-Use the sidebar to toggle **Show reasoning trace** or click example questions. Each visitor gets a separate conversation and profile keyed by **client IP** (shown as `ip_…` in the sidebar). Local runs often share `ip_127_0_0_1` or `ip_unknown`.
+Use the sidebar to toggle **Show reasoning trace** or click example questions. Each visitor gets separate **conversation memory** (SQLite checkpoints) and a **user profile** keyed by client IP (`ip_…` in the sidebar). Chat history reloads from that checkpoint when you reopen the app. **Clear chat & memory** wipes the stored thread for your IP. Local runs often share `ip_127_0_0_1` or `ip_unknown`.
 
 ## MCP server (`mcp_server.py`)
 

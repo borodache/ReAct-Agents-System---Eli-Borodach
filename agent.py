@@ -384,4 +384,44 @@ def ask(
     return answer
 
 
+def thread_config(thread_id: str) -> dict[str, Any]:
+    """LangGraph invoke/checkpoint config for a conversation thread."""
+    return {
+        "configurable": {"thread_id": thread_id},
+        "recursion_limit": get_graph_recursion_limit(),
+    }
+
+
+def chat_turns_from_checkpoint(agent, thread_id: str) -> list[tuple[str, str]]:
+    """Return (user question, assistant answer) pairs stored for this thread_id."""
+    snapshot = agent.get_state(thread_config(thread_id))
+    if not snapshot or not snapshot.values:
+        return []
+
+    messages: list[BaseMessage] = snapshot.values.get("messages", [])
+    turns: list[tuple[str, str]] = []
+    index = 0
+    while index < len(messages):
+        message = messages[index]
+        if not isinstance(message, HumanMessage) or not message.content:
+            index += 1
+            continue
+
+        question = str(message.content)
+        end = index + 1
+        while end < len(messages) and not isinstance(messages[end], HumanMessage):
+            end += 1
+
+        answer = to_natural_language_answer(messages[index:end])
+        if answer and answer != "No response generated.":
+            turns.append((question, answer))
+        index = end
+    return turns
+
+
+def clear_thread_checkpoint(agent, thread_id: str) -> None:
+    """Remove stored conversation messages for this thread (per-IP memory reset)."""
+    agent.update_state(thread_config(thread_id), {"messages": []})
+
+
 create_dataset_agent = create_react_agent
