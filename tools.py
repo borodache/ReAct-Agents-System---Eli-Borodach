@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from collections import Counter
-from typing import Callable, TypeVar
+from typing import Annotated, Any, Callable, TypeVar
 
-from langchain_core.tools import BaseTool, StructuredTool
+from langchain_core.runnables import RunnableConfig
+from langchain_core.tools import BaseTool, InjectedToolArg, StructuredTool
 from pydantic import BaseModel
 
 from dataset_store import (
@@ -18,7 +19,7 @@ from dataset_store import (
     sample_rows_stratified,
     unique_responses,
 )
-from filter_context import FilterSpec, get_filter, save_filter, update_filter
+from filter_context import FilterSpec, ensure_thread_from_config, get_filter, save_filter, update_filter
 from tool_schemas import (
     CategoryCount,
     CountDatasetRecordsInput,
@@ -203,7 +204,7 @@ def run_filter_by_category(params: FilterByCategoryInput) -> FilterToolOutput:
 
 
 def run_count_rows(params: CountRowsInput) -> CountRowsOutput:
-    spec = get_filter(params.filter_id)
+    spec = get_filter(params.filter_id)  # resolves stale/hallucinated filter_id when possible
     total = _count_for_spec(spec)
     return CountRowsOutput(
         count=total,
@@ -364,7 +365,11 @@ def _make_tool(
     args_schema: type[TInput],
     runner: Callable[[TInput], TOutput],
 ) -> StructuredTool:
-    def _invoke(**kwargs: object) -> str:
+    def _invoke(
+        config: Annotated[RunnableConfig, InjectedToolArg],
+        **kwargs: Any,
+    ) -> str:
+        ensure_thread_from_config(config)
         params = args_schema.model_validate(kwargs)
         return _to_json(runner(params))
 
@@ -383,7 +388,11 @@ def _make_tool_no_args(
     args_schema: type[BaseModel],
     runner: Callable[[], TOutput],
 ) -> StructuredTool:
-    def _invoke(**kwargs: object) -> str:
+    def _invoke(
+        config: Annotated[RunnableConfig, InjectedToolArg],
+        **kwargs: Any,
+    ) -> str:
+        ensure_thread_from_config(config)
         args_schema.model_validate(kwargs)
         return _to_json(runner())
 

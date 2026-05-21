@@ -75,6 +75,9 @@ Chains:
 Single-step shortcuts (no filter_id): get_dataset_categories, count_dataset_records,
 get_dataset_examples (returns diverse rows across intents), get_intent_distribution_for_category.
 
+For refund counts prefer: count_dataset_records(intent="get_refund") OR filter_by_intent(intent="get_refund")
+then count_rows using the filter_id from that Observation only (never reuse old filter_ids from chat history).
+
 For "Show N examples from CATEGORY": use get_dataset_examples(category=CATEGORY, limit=N).
 
 Multi-turn conversation (prior messages are in this thread):
