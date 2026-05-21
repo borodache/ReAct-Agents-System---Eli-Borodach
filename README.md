@@ -85,6 +85,16 @@ python main.py --out-of-scope-examples
 
 Type `quit`, `exit`, or `q` to leave interactive mode.
 
+## Streamlit UI (`streamlit_app.py`)
+
+Web chat interface with the same agent, sessions, and user profiles:
+
+```powershell
+streamlit run streamlit_app.py
+```
+
+Use the sidebar to set **Session ID** and **User ID**, toggle **Show reasoning trace**, or click example questions. Chat history in the UI resets when you change session/user; the agent still restores prior turns from SQLite checkpoints for the same session id.
+
 ## MCP server (`mcp_server.py`)
 
 HTTP is the **default** transport (for `fastmcp call` and remote clients).
@@ -177,6 +187,7 @@ Or start on another port: `python mcp_server.py --port 8001`
 ├── checkpointer.py   # SQLite conversation checkpoints
 ├── filter_context.py # In-memory filter_id chain (per process)
 ├── mcp_server.py     # FastMCP HTTP/stdio server
+├── streamlit_app.py  # Streamlit web UI
 └── requirements.txt
 ```
 

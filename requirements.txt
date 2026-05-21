@@ -11,3 +11,6 @@ typing-extensions>=4.0.0
 
 # MCP server (mcp_server.py)
 fastmcp>=2.0.0
+
+# Streamlit UI (streamlit_app.py)
+streamlit>=1.32.0
