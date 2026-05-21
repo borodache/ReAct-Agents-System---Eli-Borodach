@@ -20,7 +20,12 @@ from typing_extensions import TypedDict
 from answer_format import coerce_text_to_tool_calls, to_natural_language_answer
 from checkpointer import get_checkpointer
 from config import create_chat_model, create_profile_chat_model
-from filter_context import clear_filter_context, init_filter_context
+from filter_context import (
+    bind_filter_thread,
+    clear_filter_thread,
+    init_filter_context,
+    rehydrate_filters_from_messages,
+)
 from router import QueryClassification, classify_query
 from user_profile import (
     answer_profile_question,
@@ -343,11 +348,13 @@ def ask(
     if profile_for_turn_json:
         invoke_input["user_profile_json"] = profile_for_turn_json
 
-    init_filter_context()
+    bind_filter_thread(thread_id)
+    init_filter_context(reset=False)
+    rehydrate_filters_from_messages(prior_messages)
     try:
         result = agent.invoke(invoke_input, config=config)
     finally:
-        clear_filter_context()
+        bind_filter_thread(None)
 
     all_messages = result["messages"]
     turn_messages = all_messages[prior_count:] if prior_count else all_messages
@@ -420,7 +427,8 @@ def chat_turns_from_checkpoint(agent, thread_id: str) -> list[tuple[str, str]]:
 
 
 def clear_thread_checkpoint(agent, thread_id: str) -> None:
-    """Remove stored conversation messages for this thread (per-IP memory reset)."""
+    """Remove stored conversation messages and filters for this thread."""
+    clear_filter_thread(thread_id)
     agent.update_state(thread_config(thread_id), {"messages": []})
 
 

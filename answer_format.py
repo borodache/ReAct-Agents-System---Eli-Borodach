@@ -138,7 +138,7 @@ def coerce_text_to_tool_calls(text: str) -> list[dict[str, Any]] | None:
 
 def _execute_text_tool_plan(data: dict[str, Any], question: str) -> str | None:
     """Run tools when the model printed JSON instead of using native tool_calls."""
-    init_filter_context()
+    init_filter_context(reset=True)
 
     name = data.get("name")
     params = data.get("parameters") or data.get("arguments") or {}

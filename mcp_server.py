@@ -71,7 +71,7 @@ def filter_by_intent(
     filter_id: str | None = None,
 ) -> str:
     """Save rows matching an intent; returns filter_id for follow-up tools in this session."""
-    init_filter_context()
+    init_filter_context(reset=True)
     params = FilterByIntentInput(
         intent=intent,
         intent_contains=intent_contains,
