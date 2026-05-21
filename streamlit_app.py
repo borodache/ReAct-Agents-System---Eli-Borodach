@@ -7,7 +7,7 @@ from contextlib import redirect_stdout
 
 import streamlit as st
 
-import config  # noqa: F401 — loads .env before other modules use env vars
+import config  # noqa: F401 — loads .env (if present) or OS env vars
 from agent import ask, create_react_agent
 from checkpointer import normalize_session_id
 from config import (
@@ -90,8 +90,8 @@ def main() -> None:
 
     if not get_nebius_api_key():
         st.error(
-            "**NEBIUS_API_KEY** is missing. Create a `.env` file in the project root "
-            "with your Nebius API key."
+            "**NEBIUS_API_KEY** is missing. Set the `NEBIUS_API_KEY` environment variable, "
+            "or add it to a `.env` file in the project root (`.env` overrides env vars)."
         )
         st.stop()
 
@@ -111,7 +111,7 @@ def main() -> None:
             "Model override",
             value="",
             placeholder=get_nebius_model(),
-            help="Leave empty to use NEBIUS_MODEL from .env",
+            help="Leave empty to use NEBIUS_MODEL from config / secrets",
         )
         show_trace = st.checkbox("Show reasoning trace", value=False)
 

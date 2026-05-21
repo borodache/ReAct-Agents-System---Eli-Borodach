@@ -48,7 +48,8 @@ def _check_api_key() -> None:
     if not get_nebius_api_key():
         print(
             "Error: NEBIUS_API_KEY is missing.\n"
-            "  Create a .env file in the project root (see .env.example).",
+            "  Set the NEBIUS_API_KEY environment variable, or add it to a .env file\n"
+            "  in the project root (.env overrides environment variables).",
             file=sys.stderr,
         )
         sys.exit(1)

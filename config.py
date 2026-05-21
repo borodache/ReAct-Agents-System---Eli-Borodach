@@ -1,9 +1,10 @@
-"""Load settings from .env and build the Nebius chat model."""
+"""Load settings from environment variables; .env overrides when present."""
 
 from __future__ import annotations
 
 import os
 from pathlib import Path
+
 import truststore
 
 truststore.inject_into_ssl()
@@ -11,9 +12,8 @@ truststore.inject_into_ssl()
 from dotenv import load_dotenv
 from langchain_core.language_models.chat_models import BaseChatModel
 
-# Load .env from the project root; override stale shell env vars.
 _PROJECT_DIR = Path(__file__).resolve().parent
-load_dotenv(_PROJECT_DIR / ".env", override=True)
+_ENV_PATH = _PROJECT_DIR / ".env"
 
 # Must support OpenAI-style tool calling on Nebius (8B-Instruct does not).
 DEFAULT_NEBIUS_MODEL = "meta-llama/Llama-3.3-70B-Instruct"
@@ -26,22 +26,27 @@ _INVALID_MODELS = {
 }
 
 
+def load_settings() -> None:
+    """Use OS env vars; if .env exists, its values override them."""
+    if _ENV_PATH.is_file():
+        load_dotenv(_ENV_PATH, override=True)
+
+
+load_settings()
+
+
 def get_nebius_api_key() -> str:
-    """Read Nebius API key from environment (.env supports both variable names)."""
-    return (
-        os.getenv("NEBIUS_API_KEY")
-        or os.getenv("nebius_api_key")
-        or ""
-    ).strip()
+    """Read NEBIUS_API_KEY from the environment (or .env if that file exists)."""
+    return os.getenv("NEBIUS_API_KEY", "").strip()
 
 
 def get_nebius_model(default: str = DEFAULT_NEBIUS_MODEL) -> str:
-    """Chat model id on Nebius Token Factory."""
+    """Read NEBIUS_MODEL from the environment (or .env if that file exists)."""
     model = os.getenv("NEBIUS_MODEL", default).strip()
     if model in _INVALID_MODELS:
         print(
             f"Warning: NEBIUS_MODEL={model!r} does not support tool calling on Nebius. "
-            f"Using {DEFAULT_NEBIUS_MODEL} instead. Update your .env file.",
+            f"Using {DEFAULT_NEBIUS_MODEL} instead.",
             flush=True,
         )
         return DEFAULT_NEBIUS_MODEL
@@ -75,10 +80,12 @@ def create_chat_model(model: str | None = None, *, temperature: float = 0) -> Ba
     """Create a Nebius Token Factory chat model for router and ReAct nodes."""
     api_key = get_nebius_api_key()
     if not api_key:
-        raise ValueError(
-            "NEBIUS_API_KEY is not set. Add it to a .env file in the project root "
-            "(see .env.example)."
+        hint = (
+            f"Set NEBIUS_API_KEY in {_ENV_PATH.name} or as a system environment variable."
+            if _ENV_PATH.is_file()
+            else "Set NEBIUS_API_KEY as a system environment variable, or create a .env file."
         )
+        raise ValueError(f"NEBIUS_API_KEY is not set. {hint}")
 
     try:
         from langchain_nebius import ChatNebius

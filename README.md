@@ -27,7 +27,16 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-Create a `.env` file in the project root:
+### Credentials
+
+**Without a `.env` file** — set system environment variables:
+
+```powershell
+$env:NEBIUS_API_KEY = "your_api_key_here"
+$env:NEBIUS_MODEL = "meta-llama/Llama-3.3-70B-Instruct"
+```
+
+**With a `.env` file** (project root) — values in `.env` **override** the environment variables above:
 
 ```env
 NEBIUS_API_KEY=your_api_key_here
