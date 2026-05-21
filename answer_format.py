@@ -8,7 +8,7 @@ import uuid
 from typing import Any
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from filter_context import init_filter_context
 from tool_schemas import (
@@ -18,6 +18,7 @@ from tool_schemas import (
     CountRowsOutput,
     FilterByCategoryInput,
     FilterByIntentInput,
+    FilterToolOutput,
     GatherAgentResponsePatternsOutput,
     GatherCategorySummarizationOutput,
     GetDatasetCategoriesOutput,
@@ -336,6 +337,30 @@ def _format_gather_patterns_answer(result: GatherAgentResponsePatternsOutput) ->
     if result.guidance:
         lines.append(f"\nNote: {result.guidance}")
     return "\n".join(lines)
+
+
+def format_tool_result(result: BaseModel, *, include_structured: bool = False) -> str:
+    """Natural-language summary for MCP tool responses (JSON optional)."""
+    json_text = result.model_dump_json(indent=2)
+    summary = format_tool_observation(json_text)
+    if isinstance(result, FilterToolOutput):
+        if summary:
+            summary = (
+                f"{summary.rstrip('.')}. "
+                f"Use filter_id={result.filter_id!r} in follow-up tools. "
+                f"{result.next_step_hint}"
+            )
+        else:
+            summary = (
+                f"I found {result.matched_rows:,} matching rows. "
+                f"Use filter_id={result.filter_id!r} in follow-up tools. "
+                f"{result.next_step_hint}"
+            )
+    if not summary:
+        return json_text
+    if include_structured:
+        return f"{summary}\n\n---\nStructured data:\n{json_text}"
+    return summary
 
 
 def format_tool_observation(content: str, *, question: str = "") -> str | None:
